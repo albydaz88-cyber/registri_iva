@@ -1,0 +1,20 @@
+[project]
+name = "registri_iva"
+authors = [
+    { name = "Il tuo nome", email = "you@example.com" }
+]
+description = "Registri IVA italiani (acquisti, vendite, corrispettivi) con sezionali e autofatture intra-UE per ERPNext"
+requires-python = ">=3.10"
+readme = "README.md"
+dynamic = ["version"]
+dependencies = [
+    # Nessuna dipendenza di terze parti oltre a frappe/erpnext, che sono
+    # già presenti nel bench come pacchetti editable: NON vanno elencati
+    # qui (vedi nota nel commit / conversazione sul problema con uv).
+]
+
+[build-system]
+requires = ["flit_core >=3.4,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.bench.dev-dependencies]

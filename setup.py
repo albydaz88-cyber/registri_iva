@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 with open("requirements.txt") as f:
-	install_requires = f.read().strip().split("\n")
+	install_requires = [line.strip() for line in f if line.strip()]
 
 setup(
 	name="registri_iva",
