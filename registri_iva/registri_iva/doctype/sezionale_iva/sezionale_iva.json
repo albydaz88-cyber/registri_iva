@@ -1,0 +1,118 @@
+{
+ "actions": [],
+ "autoname": "field:sezionale_name",
+ "creation": "2026-09-14 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "sezionale_name",
+  "registro",
+  "naming_series_prefix",
+  "column_break_1",
+  "company",
+  "descrizione",
+  "disabled",
+  "section_auto",
+  "auto_generato",
+  "tipo_documento_trigger"
+ ],
+ "fields": [
+  {
+   "fieldname": "sezionale_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Nome Sezionale",
+   "reqd": 1,
+   "unique": 1,
+   "description": "Nome descrittivo (es. Fatture Acquisto, Autofatture Intra-UE)"
+  },
+  {
+   "fieldname": "registro",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Registro",
+   "options": "Acquisti\nVendite\nCorrispettivi",
+   "reqd": 1
+  },
+  {
+   "fieldname": "naming_series_prefix",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Prefisso Naming Series",
+   "reqd": 1,
+   "description": "Deve corrispondere esattamente a una naming series definita in Setup Series for transactions, es. PINV/.YY./, AUTOFT/.YY./"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "descrizione",
+   "fieldtype": "Small Text",
+   "label": "Descrizione"
+  },
+  {
+   "default": "0",
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "label": "Disabilitato"
+  },
+  {
+   "fieldname": "section_auto",
+   "fieldtype": "Section Break",
+   "label": "Generazione automatica (solo per sezionali collegati ad autofatture)"
+  },
+  {
+   "default": "0",
+   "description": "Se attivo, questo sezionale viene usato come destinazione della doppia annotazione automatica (es. AUTOFT) generata all'invio di una Purchase Invoice che soddisfa il criterio sotto",
+   "fieldname": "auto_generato",
+   "fieldtype": "Check",
+   "label": "Destinazione doppia annotazione automatica"
+  },
+  {
+   "depends_on": "auto_generato",
+   "description": "Elenco separato da virgola dei valori di custom_tipo_di_documento della Purchase Invoice che devono generare la doppia annotazione in questo sezionale (es. TD17,TD18,TD19)",
+   "fieldname": "tipo_documento_trigger",
+   "fieldtype": "Data",
+   "label": "Tipi Documento che attivano l'autofattura"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-14 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Registri IVA",
+ "name": "Sezionale IVA",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Accounts User"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
