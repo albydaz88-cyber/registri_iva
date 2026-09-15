@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
+from frappe.model.naming import make_autoname
 from frappe.utils import flt
 
 # Tipi imposta che non generano importo IVA (solo imponibile)
@@ -8,16 +9,15 @@ TIPI_SENZA_IMPOSTA = {"Esente", "Non Imponibile", "Non Soggetta", "Non Imponibil
 
 
 class RegistrazioneIVA(Document):
-	def validate(self):
-		self.set_naming_series_from_sezionale()
-		self.validate_company_matches_sezionale()
-		self.calcola_totali()
-
-	def set_naming_series_from_sezionale(self):
-		"""La naming series del documento è sempre quella definita sul Sezionale
-		scelto: l'utente non la imposta mai a mano, evitando disallineamenti."""
+	def autoname(self):
+		"""La naming series (e quindi il nome) dipende dal Sezionale scelto.
+		Va risolta qui, in autoname(), perché Frappe assegna il nome PRIMA di
+		chiamare validate() quando autoname="naming_series:" nel JSON: se si
+		imposta self.naming_series dentro validate() (come facevo prima), la
+		generazione del nome fallisce con 'Naming Series mandatory' perché il
+		campo è ancora vuoto nel momento in cui serve."""
 		if not self.sezionale:
-			frappe.throw(_("Seleziona un Sezionale IVA"))
+			frappe.throw(_("Seleziona un Sezionale IVA prima di salvare"))
 
 		prefix = frappe.db.get_value("Sezionale IVA", self.sezionale, "naming_series_prefix")
 		if not prefix:
@@ -27,6 +27,11 @@ class RegistrazioneIVA(Document):
 				)
 			)
 		self.naming_series = prefix
+		self.name = make_autoname(self.naming_series)
+
+	def validate(self):
+		self.validate_company_matches_sezionale()
+		self.calcola_totali()
 
 	def validate_company_matches_sezionale(self):
 		sezionale_company = frappe.db.get_value("Sezionale IVA", self.sezionale, "company")
