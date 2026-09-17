@@ -39,12 +39,12 @@ def get_data(sezionale, filters):
 		righe = _righe_da_purchase_invoice(sezionale, filters)
 	elif sezionale.registro == "Vendite" and sezionale.auto_generato:
 		righe = _righe_da_documento_integrativo(sezionale, filters)
-	elif sezionale.registro == "Vendite":
-		righe = _righe_da_sales_invoice(sezionale, filters)
 	else:
-		# Corrispettivi: non ancora implementato in questa versione.
-		frappe.msgprint(_("Registro Corrispettivi non ancora implementato."), alert=True, indicator="orange")
-		righe = []
+		# Vendite (sezionali normali, es. SINV) e Corrispettivi (es. DR, Sales
+		# Invoice cumulativa di fine giornata con Update Stock) leggono
+		# entrambi da Sales Invoice: stessa logica, cambia solo la naming
+		# series del sezionale scelto.
+		righe = _righe_da_sales_invoice(sezionale, filters)
 
 	righe.sort(key=lambda r: (r["numero_documento"] or ""))
 	return righe
