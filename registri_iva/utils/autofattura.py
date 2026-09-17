@@ -43,7 +43,7 @@ def on_purchase_invoice_submit(doc, method=None):
 		)
 		return
 
-	aliquote = _tax_breakdown(doc, "Purchase Taxes and Charges", detrazione=True)
+	aliquote = _tax_breakdown(doc, "Purchase Taxes and Charges", detrazione=True, lato="credito")
 	if not aliquote:
 		return
 
@@ -61,6 +61,8 @@ def on_purchase_invoice_submit(doc, method=None):
 		totale_documento=doc.grand_total,
 		aliquote=aliquote,
 		generata_automaticamente=1,
+		numero_documento_originale=doc.bill_no,
+		data_documento_originale=doc.bill_date,
 	)
 
 	# --- Autofattura: doppia annotazione nel registro vendite -------------
@@ -68,6 +70,9 @@ def on_purchase_invoice_submit(doc, method=None):
 		tipo_documento=getattr(doc, "custom_tipo_di_documento", None), company=doc.company
 	)
 	if sezionale_autofattura:
+		aliquote_debito = _tax_breakdown(
+			doc, "Purchase Taxes and Charges", detrazione=True, lato="debito"
+		) or aliquote
 		reg_vendite = _crea_registrazione_iva(
 			sezionale=sezionale_autofattura,
 			company=doc.company,
@@ -80,8 +85,10 @@ def on_purchase_invoice_submit(doc, method=None):
 			controparte_nome=doc.supplier_name,
 			tax_id=getattr(doc, "tax_id", None) or frappe.db.get_value("Supplier", doc.supplier, "tax_id"),
 			totale_documento=doc.grand_total,
-			aliquote=aliquote,
+			aliquote=aliquote_debito,
 			generata_automaticamente=1,
+			numero_documento_originale=doc.bill_no,
+			data_documento_originale=doc.bill_date,
 			note=_("Integrazione IVA (autofattura) generata automaticamente da {0}").format(doc.name),
 		)
 		# Collegamento bidirezionale tra le due registrazioni gemelle
@@ -104,7 +111,7 @@ def on_sales_invoice_submit(doc, method=None):
 	if not sezionale_vendite:
 		return
 
-	aliquote = _tax_breakdown(doc, "Sales Taxes and Charges", detrazione=False)
+	aliquote = _tax_breakdown(doc, "Sales Taxes and Charges", detrazione=False, lato="debito")
 	if not aliquote:
 		return
 
@@ -122,6 +129,8 @@ def on_sales_invoice_submit(doc, method=None):
 		totale_documento=doc.grand_total,
 		aliquote=aliquote,
 		generata_automaticamente=1,
+		numero_documento_originale=doc.name,
+		data_documento_originale=doc.posting_date,
 	)
 
 
@@ -169,58 +178,68 @@ def _trova_sezionale_autofattura(tipo_documento, company):
 	return None
 
 
-def _tax_breakdown(doc, taxes_table_fieldname, detrazione):
-	"""Scompone le righe tasse del documento (doc.taxes) per aliquota,
-	restituendo una lista di dict pronti per popolare il child table
-	'Registrazione IVA Aliquota'. Riusa la stessa euristica già presente
-	nei report registro_iva_acquisti/vendite di italian_invoice
-	(item_wise_tax_detail se disponibile, altrimenti tax_amount/rate),
-	con gestione dedicata delle coppie RC credito/debito generate da
-	fatture_passive.prepare_invoice_taxes per le righe natura N6.x."""
-	risultato = {}  # chiave = (tipo_imposta, aliquota) -> dict accumulato
+def _tax_breakdown(doc, taxes_table_fieldname, detrazione, lato="credito"):
+	"""Scompone le righe tasse del documento per aliquota, restituendo una lista
+	di dict pronti per il child table 'Registrazione IVA Aliquota'.
+
+	lato: "credito" -> registro acquisti (si usa la faccia a credito dell'IVA)
+	      "debito"  -> sezionale autofattura nel registro vendite (faccia a debito)
+
+	Nel template reverse charge italiano la stessa imposta compare due volte
+	sulla Purchase Invoice: una riga ADD (IVA su acquisti, a credito) e una riga
+	DEDUCT (IVA su vendite, a debito) di pari importo, che si compensano nel
+	grand total. NON vanno sommate: farlo raddoppia l'imposta. E la riga DEDUCT
+	non è "IVA non detraibile" (concetto diverso: IVA che non si può recuperare).
+	"""
+	righe_add = []
+	righe_deduct = []
 
 	for tax in doc.get("taxes") or []:
 		descrizione = tax.description or ""
-		rate = flt(tax.rate)
-		tax_amount = flt(tax.tax_amount if hasattr(tax, "tax_amount") else tax.base_tax_amount)
-
-		# La riga "RC debito" è solo lo specchio contabile della "RC credito"
-		# (stesso imponibile, importo opposto): la saltiamo per non raddoppiare
-		# l'imponibile e non azzerare l'imposta sommandole nello stesso bucket.
+		# Le coppie generate da fatture_passive per natura N6.x si riconoscono
+		# dalla descrizione invece che da add_deduct_tax (lì sono entrambe
+		# "Actual" con importo di segno opposto).
 		if RC_DEBITO_RE.search(descrizione):
+			righe_deduct.append(tax)
 			continue
-
 		if RC_CREDITO_RE.search(descrizione):
-			# Qui rate è sempre != 0 (è l'aliquota RC, es. 22), quindi il
-			# ricalcolo tax_amount/rate è affidabile.
-			base_amount = _base_amount_da_riga(tax)
-			chiave = ("Reverse Charge", rate)
-			riga = risultato.setdefault(
-				chiave, {"tipo_imposta": "Reverse Charge", "aliquota": rate, "imponibile": 0, "imposta": 0}
-			)
-			riga["imponibile"] += base_amount
-			riga["imposta"] += abs(tax_amount)
+			righe_add.append(tax)
 			continue
 
+		if getattr(tax, "add_deduct_tax", None) == "Deduct":
+			righe_deduct.append(tax)
+		else:
+			righe_add.append(tax)
+
+	# Reverse charge / autofattura: esiste una riga DEDUCT che specchia una ADD
+	# di pari aliquota e importo. In quel caso le due facce sono la stessa
+	# imposta e si sceglie quella pertinente al registro che stiamo scrivendo.
+	e_reverse_charge = bool(righe_deduct) and _sono_speculari(righe_add, righe_deduct)
+
+	if e_reverse_charge:
+		righe_da_usare = righe_deduct if lato == "debito" else righe_add
+		etichetta_forzata = "Reverse Charge"
+	else:
+		# Nessuna coppia speculare: le righe DEDUCT sono davvero decurtazioni
+		# (es. IVA indetraibile) e vanno tenute distinte.
+		righe_da_usare = righe_add
+		etichetta_forzata = None
+
+	risultato = {}
+	for tax in righe_da_usare:
+		rate = flt(tax.rate)
+		tax_amount = abs(flt(getattr(tax, "tax_amount", None) or getattr(tax, "base_tax_amount", None)))
 		base_amount = _base_amount_da_riga(tax)
+		descrizione = tax.description or ""
+
 		if base_amount == 0 and tax_amount == 0:
 			continue
 
-		non_detraibile = detrazione and getattr(tax, "add_deduct_tax", None) == "Deduct"
-		if non_detraibile:
-			chiave = ("Non Detraibile", 0)
-			riga = risultato.setdefault(chiave, {"tipo_imposta": "Non Detraibile", "aliquota": 0, "imponibile": 0, "imposta": 0})
-			riga["imposta"] += tax_amount
-			continue
-
-		if rate in (22, 10, 5, 4):
+		if etichetta_forzata:
+			tipo = etichetta_forzata
+		elif rate in (22, 10, 5, 4):
 			tipo = f"{int(rate)}%"
 		elif rate == 0:
-			# Riga a aliquota 0 senza coppia RC (es. natura N4 esente, N3 non
-			# imponibile...). Qui il documento è quasi sempre creato a mano
-			# (template fiscale scelto in form, non importato da XML), quindi
-			# la descrizione del template è di solito parlante: la usiamo
-			# come primo criterio, con fallback esplicito se ambigua.
 			descrizione_lower = descrizione.lower()
 			if "esent" in descrizione_lower:
 				tipo = "Esente"
@@ -235,12 +254,48 @@ def _tax_breakdown(doc, taxes_table_fieldname, detrazione):
 			tipo = f"{rate}%"
 
 		chiave = (tipo, rate)
-		riga = risultato.setdefault(chiave, {"tipo_imposta": tipo, "aliquota": rate, "imponibile": 0, "imposta": 0})
+		riga = risultato.setdefault(
+			chiave, {"tipo_imposta": tipo, "aliquota": rate, "imponibile": 0, "imposta": 0}
+		)
 		riga["imponibile"] += base_amount
 		if tipo not in TIPI_SENZA_IMPOSTA:
 			riga["imposta"] += tax_amount
 
+	# Righe DEDUCT non speculari (IVA realmente indetraibile): le riportiamo a
+	# parte, solo nel registro acquisti.
+	if not e_reverse_charge and detrazione and lato == "credito":
+		for tax in righe_deduct:
+			importo = abs(flt(getattr(tax, "tax_amount", None) or getattr(tax, "base_tax_amount", None)))
+			if not importo:
+				continue
+			chiave = ("Non Detraibile", flt(tax.rate))
+			riga = risultato.setdefault(
+				chiave,
+				{"tipo_imposta": "Non Detraibile", "aliquota": flt(tax.rate), "imponibile": 0, "imposta": 0},
+			)
+			riga["imponibile"] += _base_amount_da_riga(tax)
+			riga["imposta"] += importo
+
 	return list(risultato.values())
+
+
+def _sono_speculari(righe_add, righe_deduct):
+	"""True se ogni riga DEDUCT ha una ADD di pari aliquota e pari importo
+	assoluto: è la firma del template reverse charge / autofattura."""
+	if not righe_add or not righe_deduct:
+		return False
+
+	def chiavi(righe):
+		out = []
+		for t in righe:
+			importo = abs(flt(getattr(t, "tax_amount", None) or getattr(t, "base_tax_amount", None)))
+			out.append((flt(t.rate), round(importo, 2)))
+		return sorted(out)
+
+	k_add = chiavi(righe_add)
+	k_ded = chiavi(righe_deduct)
+	# Ogni deduct deve trovare corrispondenza in add.
+	return all(k in k_add for k in k_ded)
 
 
 def _base_amount_da_riga(tax):
@@ -278,6 +333,8 @@ def _crea_registrazione_iva(
 	aliquote,
 	generata_automaticamente=0,
 	note=None,
+	numero_documento_originale=None,
+	data_documento_originale=None,
 ):
 	reg = frappe.new_doc("Registrazione IVA")
 	reg.sezionale = sezionale
@@ -292,6 +349,8 @@ def _crea_registrazione_iva(
 	reg.tax_id = tax_id
 	reg.totale_documento = totale_documento
 	reg.generata_automaticamente = generata_automaticamente
+	reg.numero_documento_originale = numero_documento_originale
+	reg.data_documento_originale = data_documento_originale
 	if note:
 		reg.note = note
 

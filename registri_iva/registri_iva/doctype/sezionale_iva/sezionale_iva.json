@@ -36,11 +36,11 @@
   },
   {
    "fieldname": "naming_series_prefix",
-   "fieldtype": "Data",
+   "fieldtype": "Autocomplete",
    "in_list_view": 1,
    "label": "Prefisso Naming Series",
    "reqd": 1,
-   "description": "Deve corrispondere esattamente a una naming series definita in Setup Series for transactions, es. PINV/.YY./, AUTOFT/.YY./"
+   "description": "Scegli tra le naming series già configurate in Setup > Naming Series (es. PINV/.YY./, AUTOFT/.YY./)"
   },
   {
    "fieldname": "column_break_1",
