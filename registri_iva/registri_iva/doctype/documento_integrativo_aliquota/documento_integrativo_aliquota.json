@@ -1,6 +1,6 @@
 {
  "actions": [],
- "creation": "2026-09-14 10:00:00.000000",
+ "creation": "2026-09-17 10:00:00.000000",
  "doctype": "DocType",
  "editable_grid": 1,
  "engine": "InnoDB",
@@ -10,8 +10,7 @@
   "imponibile",
   "column_break_1",
   "imposta",
-  "natura_iva",
-  "note"
+  "natura_iva"
  ],
  "fields": [
   {
@@ -20,15 +19,13 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Tipo Imposta",
-   "options": "22%\n10%\n5%\n4%\nEsente\nNon Imponibile\nNon Soggetta\nNon Imponibile/Esente (verificare)\nNon Detraibile\nReverse Charge\nAutofattura (Integrazione)",
+   "options": "22%\n10%\n5%\n4%\nEsente\nNon Imponibile\nNon Soggetta\nFuori Campo IVA\nNon Imponibile/Esente (verificare)\nReverse Charge",
    "reqd": 1
   },
   {
    "columns": 1,
-   "description": "Valore numerico dell'aliquota (0 se Esente/Non Imponibile/Non Soggetta)",
    "fieldname": "aliquota",
    "fieldtype": "Percent",
-   "in_list_view": 1,
    "label": "Aliquota"
   },
   {
@@ -45,7 +42,6 @@
   },
   {
    "columns": 2,
-   "description": "Vuota se il tipo imposta non prevede imposta (esente, non imponibile...)",
    "fieldname": "imposta",
    "fieldtype": "Currency",
    "in_list_view": 1,
@@ -54,25 +50,19 @@
   },
   {
    "columns": 2,
-   "description": "Codice natura IVA FatturaPA (es. N1, N2.1, N3.2, N6.8...), utile per l'export XML futuro",
+   "description": "Codice natura IVA FatturaPA (es. N6.8), utile per l'export XML futuro",
    "fieldname": "natura_iva",
    "fieldtype": "Data",
-   "in_list_view": 1,
    "label": "Natura IVA"
-  },
-  {
-   "fieldname": "note",
-   "fieldtype": "Data",
-   "label": "Note"
   }
  ],
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-09-14 10:00:00.000000",
+ "modified": "2026-09-17 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Registri IVA",
- "name": "Registrazione IVA Aliquota",
+ "name": "Documento Integrativo Aliquota",
  "owner": "Administrator",
  "permissions": [],
  "sort_field": "modified",

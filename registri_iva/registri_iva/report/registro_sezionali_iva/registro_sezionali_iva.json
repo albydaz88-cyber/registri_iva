@@ -15,7 +15,7 @@
  "name": "Registro Sezionali IVA",
  "owner": "Administrator",
  "prepared_report": 0,
- "ref_doctype": "Registrazione IVA",
+ "ref_doctype": "Sezionale IVA",
  "report_name": "Registro Sezionali IVA",
  "report_type": "Script Report",
  "roles": [

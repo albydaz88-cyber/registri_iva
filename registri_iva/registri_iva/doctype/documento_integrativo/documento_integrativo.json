@@ -1,0 +1,200 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2026-09-17 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "sezionale",
+  "naming_series",
+  "column_break_1",
+  "company",
+  "posting_date",
+  "invoice_date",
+  "section_origine",
+  "tipo_documento",
+  "purchase_invoice",
+  "column_break_2",
+  "cliente_nome",
+  "cliente_tax_id",
+  "section_righe",
+  "aliquote",
+  "section_totali",
+  "totale_imponibile",
+  "column_break_3",
+  "totale_imposta",
+  "column_break_4",
+  "totale_documento",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "sezionale",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Sezionale",
+   "options": "Sezionale IVA",
+   "reqd": 1
+  },
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Naming Series"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "posting_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Data Registrazione",
+   "reqd": 1
+  },
+  {
+   "description": "Coincide con la data della Purchase Invoice di origine",
+   "fieldname": "invoice_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Data Documento",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_origine",
+   "fieldtype": "Section Break",
+   "label": "Origine"
+  },
+  {
+   "fieldname": "tipo_documento",
+   "fieldtype": "Data",
+   "label": "Tipo Documento (TDxx)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "purchase_invoice",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Purchase Invoice di Origine",
+   "options": "Purchase Invoice",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "CLIENTE PER AUTOFATTURA",
+   "description": "Le autofatture non hanno un vero cliente: per convenzione si usa questa dicitura generica",
+   "fieldname": "cliente_nome",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Cliente (generico)",
+   "reqd": 1
+  },
+  {
+   "fieldname": "cliente_tax_id",
+   "fieldtype": "Data",
+   "label": "P.IVA/CF Cliente (generico, di norma vuoto)"
+  },
+  {
+   "fieldname": "section_righe",
+   "fieldtype": "Section Break",
+   "label": "Dettaglio per tipo imposta"
+  },
+  {
+   "fieldname": "aliquote",
+   "fieldtype": "Table",
+   "label": "Aliquote",
+   "options": "Documento Integrativo Aliquota",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_totali",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "totale_imponibile",
+   "fieldtype": "Currency",
+   "label": "Totale Imponibile",
+   "options": "company:company_currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "totale_imposta",
+   "fieldtype": "Currency",
+   "label": "Totale Imposta",
+   "options": "company:company_currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_4",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "totale_documento",
+   "fieldtype": "Currency",
+   "label": "Totale Documento",
+   "options": "company:company_currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Documento Integrativo",
+   "print_hide": 1,
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-09-17 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Registri IVA",
+ "name": "Documento Integrativo",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "print": 1,
+   "report": 1,
+   "role": "Accounts User"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

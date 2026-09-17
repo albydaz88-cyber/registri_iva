@@ -20,11 +20,14 @@ frappe.query_reports["Registro Sezionali IVA"] = {
 			"label": __("Sezionale"),
 			"fieldtype": "Link",
 			"options": "Sezionale IVA",
+			"reqd": 1,
 			"get_query": function () {
 				const registro = frappe.query_report.get_filter_value("registro");
-				return {
-					filters: registro ? { registro: registro } : {},
-				};
+				const company = frappe.query_report.get_filter_value("company");
+				const filters = { disabled: 0 };
+				if (registro) filters.registro = registro;
+				if (company) filters.company = company;
+				return { filters: filters };
 			},
 		},
 		{
@@ -42,12 +45,4 @@ frappe.query_reports["Registro Sezionali IVA"] = {
 			"reqd": 1,
 		},
 	],
-
-	"formatter": function (value, row, column, data, default_formatter) {
-		value = default_formatter(value, row, column, data);
-		if (column.fieldname === "note" && data && data.note) {
-			value = `<span style="color: #ff6b6b; font-weight: bold;">${data.note}</span>`;
-		}
-		return value;
-	},
 };
