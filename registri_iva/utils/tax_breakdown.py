@@ -53,10 +53,8 @@ def tax_breakdown(doc, detrazione, lato="credito"):
 
 	if e_reverse_charge:
 		righe_da_usare = righe_deduct if lato == "debito" else righe_add
-		etichetta_forzata = "Reverse Charge"
 	else:
 		righe_da_usare = righe_add
-		etichetta_forzata = None
 
 	risultato = {}
 	for tax in righe_da_usare:
@@ -68,9 +66,11 @@ def tax_breakdown(doc, detrazione, lato="credito"):
 		if base_amount == 0 and tax_amount == 0:
 			continue
 
-		if etichetta_forzata:
-			tipo = etichetta_forzata
-		elif rate in (22, 10, 5, 4):
+		# Anche per il reverse charge il "tipo imposta" mostrato è l'aliquota
+		# applicata (es. 22%), non l'etichetta "Reverse Charge": è quello che
+		# serve a fini di registro/LIPE. Il flag reverse_charge sotto resta
+		# disponibile per chi genera la dicitura "Inversione contabile...".
+		if rate in (22, 10, 5, 4):
 			tipo = f"{int(rate)}%"
 		elif rate == 0:
 			descrizione_lower = descrizione.lower()
@@ -90,7 +90,8 @@ def tax_breakdown(doc, detrazione, lato="credito"):
 
 		chiave = (tipo, rate)
 		riga = risultato.setdefault(
-			chiave, {"tipo_imposta": tipo, "aliquota": rate, "imponibile": 0, "imposta": 0}
+			chiave,
+			{"tipo_imposta": tipo, "aliquota": rate, "imponibile": 0, "imposta": 0, "reverse_charge": e_reverse_charge},
 		)
 		riga["imponibile"] += base_amount
 		if tipo not in TIPI_SENZA_IMPOSTA:
@@ -104,7 +105,7 @@ def tax_breakdown(doc, detrazione, lato="credito"):
 			chiave = ("Non Detraibile", flt(tax.rate))
 			riga = risultato.setdefault(
 				chiave,
-				{"tipo_imposta": "Non Detraibile", "aliquota": flt(tax.rate), "imponibile": 0, "imposta": 0},
+				{"tipo_imposta": "Non Detraibile", "aliquota": flt(tax.rate), "imponibile": 0, "imposta": 0, "reverse_charge": False},
 			)
 			riga["imponibile"] += _base_amount_da_riga(tax)
 			riga["imposta"] += importo

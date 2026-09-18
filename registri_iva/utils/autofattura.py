@@ -43,13 +43,23 @@ def on_purchase_invoice_submit(doc, method=None):
 	di.purchase_invoice = doc.name
 	di.cliente_nome = CLIENTE_GENERICO
 	for riga in aliquote:
-		di.append("aliquote", riga)
+		riga_pulita = {k: v for k, v in riga.items() if k != "reverse_charge"}
+		di.append("aliquote", riga_pulita)
 
 	di.insert(ignore_permissions=True)
 	di.submit()
 
 
-def on_purchase_invoice_cancel(doc, method=None):
+def on_purchase_invoice_before_cancel(doc, method=None):
+	"""Cancella il Documento Integrativo collegato PRIMA che Frappe blocchi il
+	cancel della Purchase Invoice.
+
+	Va agganciato su 'before_cancel', non su 'on_cancel': Frappe esegue il
+	controllo sui documenti collegati (_check_if_doc_is_linked, che genera
+	"Cannot delete or cancel because X is linked with Y") SUBITO DOPO
+	before_cancel e PRIMA di on_cancel. Se questa pulizia gira in on_cancel
+	arriva sempre troppo tardi: il cancel della Purchase Invoice è già stato
+	bloccato dal controllo di Frappe prima ancora di arrivarci."""
 	nomi = frappe.get_all(
 		"Documento Integrativo",
 		filters={"purchase_invoice": doc.name, "docstatus": 1},

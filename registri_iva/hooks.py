@@ -8,6 +8,10 @@ app_email = "you@example.com"
 app_license = "MIT"
 required_apps = ["frappe", "erpnext", "italian_invoice"]
 
+doctype_js = {
+	"Sezionale IVA": "public/js/sezionale_iva.js",
+}
+
 # Il registro acquisti e il registro vendite "normale" sono letti live dal
 # report direttamente da Purchase Invoice / Sales Invoice: nessun hook serve
 # per quelli. L'unico documento che non esisterebbe altrimenti è il Documento
@@ -15,6 +19,6 @@ required_apps = ["frappe", "erpnext", "italian_invoice"]
 doc_events = {
 	"Purchase Invoice": {
 		"on_submit": "registri_iva.utils.autofattura.on_purchase_invoice_submit",
-		"on_cancel": "registri_iva.utils.autofattura.on_purchase_invoice_cancel",
+		"before_cancel": "registri_iva.utils.autofattura.on_purchase_invoice_before_cancel",
 	},
 }
