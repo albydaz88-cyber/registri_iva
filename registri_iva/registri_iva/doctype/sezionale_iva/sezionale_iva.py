@@ -28,8 +28,10 @@ class SezionaleIVA(Document):
 
 
 def get_prefissi_disponibili():
-	"""Tutti i prefissi naming series noti al sistema: quelli configurati sui
-	doctype transazionali più quelli già usati almeno una volta (tabella Series)."""
+	"""Prefissi naming series noti al sistema, presi dai doctype transazionali
+	(Sales/Purchase/POS Invoice). Nota: NON si può leggere la tabella interna
+	'Series' di Frappe con frappe.get_all — non è un DocType vero e proprio,
+	la chiamata fallisce sempre con 'DocType Series not found'."""
 	prefissi = set()
 
 	for doctype in ("Sales Invoice", "Purchase Invoice", "POS Invoice"):
@@ -41,20 +43,17 @@ def get_prefissi_disponibili():
 		if field and field.options:
 			prefissi.update(p.strip() for p in field.options.split("\n") if p.strip())
 
-	# Serie già in uso (il name della tabella Series è il prefisso "risolto",
-	# es. PINV/26/ : utile come riferimento ma non è il pattern con .YY.)
-	try:
-		for row in frappe.get_all("Series", fields=["name"], limit=500):
-			if row.get("name"):
-				prefissi.add(row["name"])
-	except Exception:
-		pass
-
 	return sorted(prefissi)
 
 
 @frappe.whitelist()
 def get_prefissi_options(doctype=None, txt=None, searchfield=None, start=0, page_len=20, filters=None):
-	"""Sorgente dati per il campo Autocomplete 'Prefisso Naming Series'."""
-	txt = (txt or "").lower()
-	return [[p] for p in get_prefissi_disponibili() if txt in p.lower()]
+	"""Sorgente dati per il campo Autocomplete 'Prefisso Naming Series'.
+	Non deve mai far fallire l'apertura del form: in caso di errore imprevisto
+	torna una lista vuota invece di propagare l'eccezione al client."""
+	try:
+		txt = (txt or "").lower()
+		return [[p] for p in get_prefissi_disponibili() if txt in p.lower()]
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "Sezionale IVA: get_prefissi_options")
+		return []
