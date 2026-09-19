@@ -36,11 +36,12 @@
   },
   {
    "fieldname": "naming_series_prefix",
-   "fieldtype": "Autocomplete",
+   "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Prefisso Naming Series",
    "reqd": 1,
-   "description": "Scegli tra le naming series già configurate in Setup > Naming Series (es. PINV/.YY./, AUTOFT/.YY./)"
+   "description": "Scegli tra le naming series già configurate in Setup > Naming Series (es. PINV/.YY./, AUTOFT/.YY./). Se non vedi il prefisso che ti serve, aggiungilo prima lì.",
+   "options": ""
   },
   {
    "fieldname": "column_break_1",
