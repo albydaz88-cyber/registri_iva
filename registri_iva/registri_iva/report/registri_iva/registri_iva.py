@@ -7,23 +7,28 @@ from registri_iva.utils.tax_breakdown import tax_breakdown
 
 def execute(filters=None):
 	filters = filters or {}
-	columns = get_columns()
 
 	if not filters.get("sezionale"):
 		frappe.msgprint(_("Seleziona un Sezionale per generare il registro."))
-		return columns, []
+		return get_columns(), []
 
 	sezionale = frappe.get_doc("Sezionale IVA", filters["sezionale"])
+	columns = get_columns(sezionale)
 	data = get_data(sezionale, filters)
 	return columns, data
 
 
-def get_columns():
-	return [
+def get_columns(sezionale=None):
+	columns = [
 		{"fieldname": "posting_date", "label": _("Data Registrazione"), "fieldtype": "Date", "width": 100},
 		{"fieldname": "numero_documento_originale", "label": _("N. Documento Originale"), "fieldtype": "Data", "width": 140},
-		{"fieldname": "ragione_sociale", "label": _("Ragione Sociale"), "fieldtype": "Data", "width": 200},
-		{"fieldname": "tax_id", "label": _("P.IVA/CF"), "fieldtype": "Data", "width": 130},
+	]
+	if not sezionale or sezionale.registro != "Corrispettivi":
+		columns += [
+			{"fieldname": "ragione_sociale", "label": _("Ragione Sociale"), "fieldtype": "Data", "width": 200},
+			{"fieldname": "tax_id", "label": _("P.IVA/CF"), "fieldtype": "Data", "width": 130},
+		]
+	columns += [
 		{"fieldname": "numero_documento", "label": _("N. Documento (Protocollo)"), "fieldtype": "Dynamic Link",
 		 "options": "doctype_origine", "width": 150},
 		{"fieldname": "data_documento", "label": _("Data Documento"), "fieldtype": "Date", "width": 100},
@@ -33,6 +38,7 @@ def get_columns():
 		{"fieldname": "totale_documento", "label": _("Totale Documento"), "fieldtype": "Currency", "width": 130},
 		{"fieldname": "note", "label": _("Note"), "fieldtype": "Data", "width": 350},
 	]
+	return columns
 
 
 def get_data(sezionale, filters):

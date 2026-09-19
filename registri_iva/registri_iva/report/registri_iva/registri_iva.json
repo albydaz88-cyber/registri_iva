@@ -12,11 +12,11 @@
  "modified": "2026-09-14 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Registri IVA",
- "name": "Registro Sezionali IVA",
+ "name": "Registri IVA",
  "owner": "Administrator",
  "prepared_report": 0,
  "ref_doctype": "Sezionale IVA",
- "report_name": "Registro Sezionali IVA",
+ "report_name": "Registri IVA",
  "report_type": "Script Report",
  "roles": [
   {

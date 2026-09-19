@@ -1,0 +1,15 @@
+[
+ {
+  "default": "0",
+  "depends_on": "eval:!doc.__islocal",
+  "description": "Se spuntato, questa fattura di vendita salta i controlli sui campi obbligatori per la fatturazione elettronica (indirizzo cliente, P.IVA/CF, Codice Destinatario). Pensato per fatture cumulative come i corrispettivi giornalieri, che non transitano da SDI.",
+  "doctype": "Custom Field",
+  "dt": "Sales Invoice",
+  "fieldname": "custom_escludi_da_sdi",
+  "fieldtype": "Check",
+  "insert_after": "customer",
+  "label": "Escludi da Fatturazione Elettronica (SDI)",
+  "module": "Registri IVA",
+  "name": "Sales Invoice-custom_escludi_da_sdi"
+ }
+]

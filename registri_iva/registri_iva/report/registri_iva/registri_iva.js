@@ -1,4 +1,4 @@
-frappe.query_reports["Registro Sezionali IVA"] = {
+frappe.query_reports["Registri IVA"] = {
 	"filters": [
 		{
 			"fieldname": "company",
