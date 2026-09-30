@@ -110,27 +110,7 @@ def tax_breakdown(doc, detrazione, lato="credito"):
 			riga["imponibile"] += _base_amount_da_riga(tax)
 			riga["imposta"] += importo
 
-	righe = list(risultato.values())
-
-	# Il registro va sempre al centesimo, indipendentemente dalla precisione
-	# interna con cui ERPNext ha calcolato le righe (spesso 8 decimali, non
-	# modificabile per via della valorizzazione di magazzino altrove). Con una
-	# sola aliquota (caso tipico dei corrispettivi, un'unica Sales Invoice
-	# cumulativa) l'imposta si ricava per differenza dal totale reale del
-	# documento: garantisce che imponibile+imposta torni sempre esatto, anche
-	# quando "Tax Included in Basic Rate" produce un imponibile con infiniti
-	# decimali (es. 100 / 1,22).
-	if len(righe) == 1:
-		totale_doc = flt(getattr(doc, "rounded_total", None) or doc.grand_total, 2)
-		imposta_r = flt(totale_doc - flt(righe[0]["imponibile"], 2), 2)
-		righe[0]["imponibile"] = flt(righe[0]["imponibile"], 2)
-		righe[0]["imposta"] = imposta_r
-	else:
-		for r in righe:
-			r["imponibile"] = flt(r["imponibile"], 2)
-			r["imposta"] = flt(r["imposta"], 2)
-
-	return righe
+	return list(risultato.values())
 
 
 def _sono_speculari(righe_add, righe_deduct):
