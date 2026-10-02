@@ -56,13 +56,33 @@ def tax_breakdown(doc, detrazione, lato="credito"):
 	else:
 		righe_da_usare = righe_add
 
+	# Purchase Invoice: Purchase Taxes and Charges è un riepilogo per
+	# aliquota/conto, non per riga — due articoli con nature DIVERSE (es.
+	# N2.2 e N3.2) ma stessa aliquota 0% collassano nella stessa riga tassa,
+	# perdendo la distinzione. La natura va quindi letta dagli ITEM (granulare
+	# per riga), non dalla tax row: qui costruiamo l'aggregato per poterla
+	# usare al posto della riga tassa aggregata più sotto.
+	nature_da_item = {}
+	if doc.doctype == "Purchase Invoice":
+		for item in doc.get("items") or []:
+			codice = (item.get("custom_motivo_esenzione_iva") or "").strip()
+			if not codice:
+				continue
+			imponibile = flt(item.get("base_net_amount") or item.get("net_amount") or 0)
+			if not imponibile:
+				continue
+			nature_da_item[codice] = nature_da_item.get(codice, 0) + imponibile
+
 	risultato = {}
 	for tax in righe_da_usare:
 		rate = flt(tax.rate)
 		tax_amount = abs(flt(getattr(tax, "tax_amount", None) or getattr(tax, "base_tax_amount", None)))
 		base_amount = _base_amount_da_riga(tax)
 		descrizione = tax.description or ""
-		natura = (getattr(tax, "custom_motivo_esenzione_iva", None) or "").strip()
+		# Per Purchase Invoice la natura si legge solo dagli item (sopra): si
+		# ignora quella eventualmente sulla tax row per non rischiare di
+		# contare due volte lo stesso imponibile.
+		natura = "" if doc.doctype == "Purchase Invoice" else (getattr(tax, "custom_motivo_esenzione_iva", None) or "").strip()
 
 		if base_amount == 0 and tax_amount == 0 and not natura:
 			continue
@@ -75,20 +95,21 @@ def tax_breakdown(doc, detrazione, lato="credito"):
 			# (es. "22%"), mai il codice natura, su richiesta esplicita.
 			tipo = f"{int(rate)}%" if rate == int(rate) else f"{rate}%"
 		elif natura:
-			# Fonte primaria: il codice Natura registrato su
-			# custom_motivo_esenzione_iva (Link a "Motivo esenzione IVA",
-			# già popolato dall'import SDI o dalla validazione manuale su
-			# Sales Invoice). Preferito al rate numerico perché più affidabile
-			# — il rate di queste righe può azzerarsi dopo l'import.
+			# Solo Sales Invoice arriva qui con natura valorizzata (vedi
+			# sopra): lì il JS di validazione la richiede per riga tassa,
+			# quindi è affidabile anche a questo livello.
 			tipo = _label_natura(natura)
 			base_amount = base_amount or flt(getattr(tax, "total", 0))
-			# Solo le nature N6.x (inversione contabile) comportano un'imposta
-			# autoliquidata; tutte le altre (N1-N5, N7) per definizione no.
 			ha_imposta = natura.upper().startswith("N6")
 		elif rate in (22, 10, 5, 4):
 			tipo = f"{int(rate)}%"
 		elif rate == 0:
-			# Nessun codice natura collegato (dato più vecchio, o riga non
+			if doc.doctype == "Purchase Invoice" and nature_da_item:
+				# Questa riga aggregata a aliquota 0 è già rappresentata,
+				# articolo per articolo, da nature_da_item sotto: salterla qui
+				# evita di contarla una seconda volta in modo generico.
+				continue
+			# Nessun dato di natura disponibile (fattura più vecchia, o non
 			# ancora passata dall'importer aggiornato): fallback sulla
 			# descrizione testuale, meno affidabile.
 			descrizione_lower = descrizione.lower()
@@ -116,6 +137,20 @@ def tax_breakdown(doc, detrazione, lato="credito"):
 		riga["imponibile"] += base_amount
 		if ha_imposta:
 			riga["imposta"] += tax_amount
+
+	# Righe natura lette dagli item (Purchase Invoice, vedi sopra). N6.x
+	# (inversione contabile) è l'unica famiglia con imposta autoliquidata; se
+	# presente a livello item verrebbe comunque già gestita dalla coppia
+	# RC credito/debito sulla tax row, quindi qui è sempre a imposta zero.
+	for codice, imponibile in nature_da_item.items():
+		tipo = _label_natura(codice)
+		chiave = (tipo, 0.0, codice)
+		riga = risultato.setdefault(
+			chiave,
+			{"tipo_imposta": tipo, "aliquota": 0.0, "imponibile": 0, "imposta": 0,
+			 "reverse_charge": False, "natura_iva": codice},
+		)
+		riga["imponibile"] += imponibile
 
 	if not e_reverse_charge and detrazione and lato == "credito":
 		for tax in righe_deduct:
