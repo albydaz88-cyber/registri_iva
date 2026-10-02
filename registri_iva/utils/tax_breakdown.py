@@ -62,17 +62,35 @@ def tax_breakdown(doc, detrazione, lato="credito"):
 		tax_amount = abs(flt(getattr(tax, "tax_amount", None) or getattr(tax, "base_tax_amount", None)))
 		base_amount = _base_amount_da_riga(tax)
 		descrizione = tax.description or ""
+		natura = (getattr(tax, "custom_motivo_esenzione_iva", None) or "").strip()
 
-		if base_amount == 0 and tax_amount == 0:
+		if base_amount == 0 and tax_amount == 0 and not natura:
 			continue
 
-		# Anche per il reverse charge il "tipo imposta" mostrato è l'aliquota
-		# applicata (es. 22%), non l'etichetta "Reverse Charge": è quello che
-		# serve a fini di registro/LIPE. Il flag reverse_charge sotto resta
-		# disponibile per chi genera la dicitura "Inversione contabile...".
-		if rate in (22, 10, 5, 4):
+		ha_imposta = True  # salvo i casi sotto che la azzerano esplicitamente
+
+		if e_reverse_charge:
+			# Riga già instradata come faccia credito/debito del reverse
+			# charge (vedi sopra): qui si mostra sempre l'aliquota applicata
+			# (es. "22%"), mai il codice natura, su richiesta esplicita.
+			tipo = f"{int(rate)}%" if rate == int(rate) else f"{rate}%"
+		elif natura:
+			# Fonte primaria: il codice Natura registrato su
+			# custom_motivo_esenzione_iva (Link a "Motivo esenzione IVA",
+			# già popolato dall'import SDI o dalla validazione manuale su
+			# Sales Invoice). Preferito al rate numerico perché più affidabile
+			# — il rate di queste righe può azzerarsi dopo l'import.
+			tipo = _label_natura(natura)
+			base_amount = base_amount or flt(getattr(tax, "total", 0))
+			# Solo le nature N6.x (inversione contabile) comportano un'imposta
+			# autoliquidata; tutte le altre (N1-N5, N7) per definizione no.
+			ha_imposta = natura.upper().startswith("N6")
+		elif rate in (22, 10, 5, 4):
 			tipo = f"{int(rate)}%"
 		elif rate == 0:
+			# Nessun codice natura collegato (dato più vecchio, o riga non
+			# ancora passata dall'importer aggiornato): fallback sulla
+			# descrizione testuale, meno affidabile.
 			descrizione_lower = descrizione.lower()
 			if "esent" in descrizione_lower:
 				tipo = "Esente"
@@ -85,16 +103,18 @@ def tax_breakdown(doc, detrazione, lato="credito"):
 			else:
 				tipo = "Non Imponibile/Esente (verificare)"
 			base_amount = base_amount or flt(getattr(tax, "total", 0))
+			ha_imposta = False
 		else:
 			tipo = f"{rate}%"
 
-		chiave = (tipo, rate)
+		chiave = (tipo, rate, natura)
 		riga = risultato.setdefault(
 			chiave,
-			{"tipo_imposta": tipo, "aliquota": rate, "imponibile": 0, "imposta": 0, "reverse_charge": e_reverse_charge},
+			{"tipo_imposta": tipo, "aliquota": rate, "imponibile": 0, "imposta": 0,
+			 "reverse_charge": e_reverse_charge, "natura_iva": natura or None},
 		)
 		riga["imponibile"] += base_amount
-		if tipo not in TIPI_SENZA_IMPOSTA:
+		if ha_imposta:
 			riga["imposta"] += tax_amount
 
 	if not e_reverse_charge and detrazione and lato == "credito":
@@ -102,15 +122,25 @@ def tax_breakdown(doc, detrazione, lato="credito"):
 			importo = abs(flt(getattr(tax, "tax_amount", None) or getattr(tax, "base_tax_amount", None)))
 			if not importo:
 				continue
-			chiave = ("Non Detraibile", flt(tax.rate))
+			chiave = ("Non Detraibile", flt(tax.rate), None)
 			riga = risultato.setdefault(
 				chiave,
-				{"tipo_imposta": "Non Detraibile", "aliquota": flt(tax.rate), "imponibile": 0, "imposta": 0, "reverse_charge": False},
+				{"tipo_imposta": "Non Detraibile", "aliquota": flt(tax.rate), "imponibile": 0, "imposta": 0,
+				 "reverse_charge": False, "natura_iva": None},
 			)
 			riga["imponibile"] += _base_amount_da_riga(tax)
 			riga["imposta"] += importo
 
 	return list(risultato.values())
+
+
+def _label_natura(codice):
+	"""'N2.2' -> 'N2.2 - Non soggette – altri casi', leggendo la descrizione da
+	Motivo esenzione IVA (già pre-popolata da italian_invoice/install.py con i
+	codici N1-N7). Cache per evitare una query per riga su fatture con molte
+	righe della stessa natura."""
+	descrizione = frappe.get_cached_value("Motivo esenzione IVA", codice, "descrizione")
+	return f"{codice} - {descrizione}" if descrizione else codice
 
 
 def _sono_speculari(righe_add, righe_deduct):

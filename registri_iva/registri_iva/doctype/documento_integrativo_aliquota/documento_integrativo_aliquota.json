@@ -16,10 +16,9 @@
   {
    "columns": 2,
    "fieldname": "tipo_imposta",
-   "fieldtype": "Select",
+   "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Tipo Imposta",
-   "options": "22%\n10%\n5%\n4%\nEsente\nNon Imponibile\nNon Soggetta\nFuori Campo IVA\nNon Imponibile/Esente (verificare)\nReverse Charge",
    "reqd": 1
   },
   {
