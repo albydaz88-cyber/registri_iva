@@ -2,7 +2,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt, formatdate
 
-from registri_iva.utils.tax_breakdown import tax_breakdown
+from registri_iva.utils.tax_breakdown import tax_breakdown, totale_documento
 
 
 def execute(filters=None):
@@ -53,8 +53,33 @@ def get_data(sezionale, filters):
 		# series del sezionale scelto.
 		righe = _righe_da_sales_invoice(sezionale, filters)
 
+	# sort stabile: le righe dello stesso documento restano nell'ordine in cui
+	# sono state create, quindi "ultima riga del documento" resta l'ultima.
 	righe.sort(key=lambda r: (r["numero_documento"] or ""))
 	return righe
+
+
+def _accoda_righe(righe, base, aliquote, totale, nota_rc="", nota_totale="", nota_su_tutte=False):
+	"""Aggiunge al registro una riga per ogni aliquota/natura del documento.
+
+	Il Totale Documento compare solo sull'ULTIMA riga del documento; sulle
+	precedenti la cella resta vuota (None, non 0), cosi' la somma della colonna
+	e' corretta e non ci sono "0,00" a disturbare la lettura."""
+	ultima = len(aliquote) - 1
+	for i, a in enumerate(aliquote):
+		nota = nota_rc if (nota_su_tutte or a.get("reverse_charge")) else ""
+		if i == ultima and nota_totale:
+			nota = f"{nota} {nota_totale}".strip()
+
+		riga = dict(base)
+		riga.update({
+			"imponibile": flt(a["imponibile"]),
+			"tipo_imposta": a["tipo_imposta"],
+			"imposta": flt(a["imposta"]),
+			"totale_documento": totale if i == ultima else None,
+			"note": nota,
+		})
+		righe.append(riga)
 
 
 def _nota_inversione_contabile(numero_pi, data_pi, supplier_name, tax_id):
@@ -92,32 +117,49 @@ def _righe_da_purchase_invoice(sezionale, filters):
 		tax_id = pi.get("tax_id") or frappe.db.get_value("Supplier", pi.supplier, "tax_id")
 		data_doc = pi.bill_date or pi.posting_date
 
-		# Totale fiscale del documento = somma di imponibile+imposta su tutte
-		# le aliquote di QUESTA fattura, non pi.grand_total: sulle fatture in
-		# reverse charge (righe ADD/DEDUCT che si autocompensano) grand_total
-		# riflette solo il netto dovuto al fornitore estero, non il valore
-		# dell'operazione ai fini del registro.
-		totale_fiscale = sum(flt(a["imponibile"]) + flt(a["imposta"]) for a in aliquote)
+		nota_verifica = ""
+		if not aliquote and flt(pi.get("base_net_total")):
+			# Nessuna riga IVA riconoscibile: meglio una riga da verificare che un
+			# documento che sparisce in silenzio dal registro.
+			aliquote = [{
+				"tipo_imposta": _("Da verificare"),
+				"aliquota": 0,
+				"imponibile": flt(pi.base_net_total),
+				"imposta": 0,
+				"reverse_charge": False,
+			}]
+			nota_verifica = _("Nessuna riga IVA riconoscibile nel documento: verificare")
+
+		# Totale del documento: ImportoTotaleDocumento dell'XML del fornitore se
+		# disponibile, altrimenti imponibile+imposta di QUESTA fattura (non
+		# pi.grand_total: sulle fatture in reverse charge le righe ADD/DEDUCT si
+		# autocompensano e grand_total riflette solo il netto dovuto al fornitore).
+		somma = sum(flt(a["imponibile"]) + flt(a["imposta"]) for a in aliquote)
+		totale = totale_documento(pi, aliquote)
+
+		nota_totale = nota_verifica
+		if abs(totale - somma) > 0.005:
+			nota_totale = (
+				f"{nota_totale} " if nota_totale else ""
+			) + _("Totale da XML: {0} differisce da imponibile+imposta ({1})").format(
+				frappe.format_value(totale, {"fieldtype": "Currency"}),
+				frappe.format_value(somma, {"fieldtype": "Currency"}),
+			)
 
 		nota = ""
 		if any(a.get("reverse_charge") for a in aliquote):
 			nota = _nota_inversione_contabile(pi.name, data_doc, pi.supplier_name, tax_id)
 
-		for a in aliquote:
-			righe.append({
-				"posting_date": pi.posting_date,
-				"numero_documento_originale": pi.bill_no or pi.name,
-				"ragione_sociale": pi.supplier_name,
-				"tax_id": tax_id,
-				"numero_documento": pi.name,
-				"doctype_origine": "Purchase Invoice",
-				"data_documento": data_doc,
-				"imponibile": flt(a["imponibile"]),
-				"tipo_imposta": a["tipo_imposta"],
-				"imposta": flt(a["imposta"]),
-				"totale_documento": totale_fiscale,
-				"note": nota if a.get("reverse_charge") else "",
-			})
+		base = {
+			"posting_date": pi.posting_date,
+			"numero_documento_originale": pi.bill_no or pi.name,
+			"ragione_sociale": pi.supplier_name,
+			"tax_id": tax_id,
+			"numero_documento": pi.name,
+			"doctype_origine": "Purchase Invoice",
+			"data_documento": data_doc,
+		}
+		_accoda_righe(righe, base, aliquote, totale, nota_rc=nota, nota_totale=nota_totale.strip())
 	return righe
 
 
@@ -130,22 +172,18 @@ def _righe_da_sales_invoice(sezionale, filters):
 		si = frappe.get_doc("Sales Invoice", nome)
 		aliquote = tax_breakdown(si, detrazione=False, lato="debito")
 		tax_id = si.get("tax_id") or frappe.db.get_value("Customer", si.customer, "tax_id")
-		totale_fiscale = sum(flt(a["imponibile"]) + flt(a["imposta"]) for a in aliquote)
-		for a in aliquote:
-			righe.append({
-				"posting_date": si.posting_date,
-				"numero_documento_originale": si.name,  # coincidono, come da requisito
-				"ragione_sociale": si.customer_name,
-				"tax_id": tax_id,
-				"numero_documento": si.name,
-				"doctype_origine": "Sales Invoice",
-				"data_documento": si.posting_date,
-				"imponibile": flt(a["imponibile"]),
-				"tipo_imposta": a["tipo_imposta"],
-				"imposta": flt(a["imposta"]),
-				"totale_documento": totale_fiscale,
-				"note": "",
-			})
+		totale = sum(flt(a["imponibile"]) + flt(a["imposta"]) for a in aliquote)
+
+		base = {
+			"posting_date": si.posting_date,
+			"numero_documento_originale": si.name,  # coincidono, come da requisito
+			"ragione_sociale": si.customer_name,
+			"tax_id": tax_id,
+			"numero_documento": si.name,
+			"doctype_origine": "Sales Invoice",
+			"data_documento": si.posting_date,
+		}
+		_accoda_righe(righe, base, aliquote, totale)
 	return righe
 
 
@@ -155,7 +193,7 @@ def _righe_da_documento_integrativo(sezionale, filters):
 		"Documento Integrativo",
 		filters=di_filters,
 		fields=["name", "posting_date", "invoice_date", "cliente_nome", "cliente_tax_id",
-		        "totale_documento", "purchase_invoice"],
+			"totale_documento", "purchase_invoice"],
 	)
 
 	righe = []
@@ -164,6 +202,7 @@ def _righe_da_documento_integrativo(sezionale, filters):
 			"Documento Integrativo Aliquota",
 			filters={"parent": row["name"]},
 			fields=["tipo_imposta", "imponibile", "imposta"],
+			order_by="idx asc",
 		)
 
 		nota = ""
@@ -179,19 +218,14 @@ def _righe_da_documento_integrativo(sezionale, filters):
 					pi.name, pi.bill_date or pi.posting_date, pi.supplier_name, tax_id
 				)
 
-		for a in aliquote:
-			righe.append({
-				"posting_date": row["posting_date"],
-				"numero_documento_originale": row["name"],  # coincidono, come da requisito
-				"ragione_sociale": row["cliente_nome"],
-				"tax_id": row["cliente_tax_id"],
-				"numero_documento": row["name"],
-				"doctype_origine": "Documento Integrativo",
-				"data_documento": row["invoice_date"],
-				"imponibile": flt(a["imponibile"]),
-				"tipo_imposta": a["tipo_imposta"],
-				"imposta": flt(a["imposta"]),
-				"totale_documento": row["totale_documento"],
-				"note": nota,
-			})
+		base = {
+			"posting_date": row["posting_date"],
+			"numero_documento_originale": row["name"],  # coincidono, come da requisito
+			"ragione_sociale": row["cliente_nome"],
+			"tax_id": row["cliente_tax_id"],
+			"numero_documento": row["name"],
+			"doctype_origine": "Documento Integrativo",
+			"data_documento": row["invoice_date"],
+		}
+		_accoda_righe(righe, base, aliquote, row["totale_documento"], nota_rc=nota, nota_su_tutte=True)
 	return righe
