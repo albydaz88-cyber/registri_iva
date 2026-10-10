@@ -3,7 +3,7 @@ from frappe import _
 from frappe.utils import flt, formatdate
 
 from registri_iva.utils.tax_breakdown import tax_breakdown, totale_documento
-
+from registri_iva.utils.tipo_documento import codici_tipologia, tipi_acquisti
 
 def execute(filters=None):
 	filters = filters or {}
@@ -19,26 +19,38 @@ def execute(filters=None):
 
 
 def get_columns(sezionale=None):
-	columns = [
-		{"fieldname": "posting_date", "label": _("Data Registrazione"), "fieldtype": "Date", "width": 100},
-		{"fieldname": "numero_documento_originale", "label": _("N. Documento Originale"), "fieldtype": "Data", "width": 140},
-	]
-	if not sezionale or sezionale.registro != "Corrispettivi":
-		columns += [
-			{"fieldname": "ragione_sociale", "label": _("Ragione Sociale"), "fieldtype": "Data", "width": 200},
-			{"fieldname": "tax_id", "label": _("P.IVA/CF"), "fieldtype": "Data", "width": 130},
-		]
-	columns += [
-		{"fieldname": "numero_documento", "label": _("N. Documento (Protocollo)"), "fieldtype": "Dynamic Link",
-		 "options": "doctype_origine", "width": 150},
-		{"fieldname": "data_documento", "label": _("Data Documento"), "fieldtype": "Date", "width": 100},
-		{"fieldname": "imponibile", "label": _("Imponibile"), "fieldtype": "Currency", "width": 110},
-		{"fieldname": "tipo_imposta", "label": _("Tipo Imposta"), "fieldtype": "Data", "width": 130},
-		{"fieldname": "imposta", "label": _("Imposta"), "fieldtype": "Currency", "width": 110},
-		{"fieldname": "totale_documento", "label": _("Totale Documento"), "fieldtype": "Currency", "width": 130},
-		{"fieldname": "note", "label": _("Note"), "fieldtype": "Data", "width": 350},
-	]
-	return columns
+    columns = [
+        {"fieldname": "posting_date", "label": _("Data Registrazione"), "fieldtype": "Date", "width": 100},
+    ]
+
+    if not sezionale or sezionale.registro != "Corrispettivi":
+        columns.append(
+            {"fieldname": "tipo_documento", "label": _("Tipo Documento"), "fieldtype": "Data", "width": 90}
+        )
+
+    columns.append(
+        {"fieldname": "numero_documento_originale", "label": _("N. Documento Originale"), "fieldtype": "Data", "width": 140}
+    )
+
+    if not sezionale or sezionale.registro != "Corrispettivi":
+        columns += [
+            {"fieldname": "ragione_sociale", "label": _("Ragione Sociale"), "fieldtype": "Data", "width": 200},
+            {"fieldname": "tax_id", "label": _("P.IVA/CF"), "fieldtype": "Data", "width": 130},
+        ]
+
+    columns += [
+        {"fieldname": "numero_documento", "label": _("N. Documento (Protocollo)"), "fieldtype": "Dynamic Link",
+         "options": "doctype_origine", "width": 150},
+        {"fieldname": "data_documento", "label": _("Data Documento"), "fieldtype": "Date", "width": 100},
+        {"fieldname": "imponibile", "label": _("Imponibile"), "fieldtype": "Currency", "width": 110},
+        {"fieldname": "tipo_imposta", "label": _("Tipo Imposta"), "fieldtype": "Data", "width": 130},
+        {"fieldname": "imposta", "label": _("Imposta"), "fieldtype": "Currency", "width": 110},
+        {"fieldname": "totale_documento", "label": _("Totale Documento"), "fieldtype": "Currency", "width": 130},
+        {"fieldname": "note", "label": _("Note"), "fieldtype": "Data", "width": 350},
+    ]
+
+    return columns
+
 
 
 def get_data(sezionale, filters):
@@ -110,6 +122,9 @@ def _righe_da_purchase_invoice(sezionale, filters):
 	pi_filters = _base_filters(sezionale, filters)
 	nomi = frappe.get_all("Purchase Invoice", filters=pi_filters, pluck="name")
 
+	# Recupera il tipo documento per le fatture passive
+	tipi = tipi_acquisti(nomi)
+
 	righe = []
 	for nome in nomi:
 		pi = frappe.get_doc("Purchase Invoice", nome)
@@ -152,6 +167,7 @@ def _righe_da_purchase_invoice(sezionale, filters):
 
 		base = {
 			"posting_date": pi.posting_date,
+			"tipo_documento": tipi.get(pi.name),
 			"numero_documento_originale": pi.bill_no or pi.name,
 			"ragione_sociale": pi.supplier_name,
 			"tax_id": tax_id,
@@ -167,6 +183,8 @@ def _righe_da_sales_invoice(sezionale, filters):
 	si_filters = _base_filters(sezionale, filters)
 	nomi = frappe.get_all("Sales Invoice", filters=si_filters, pluck="name")
 
+	codici = codici_tipologia()
+
 	righe = []
 	for nome in nomi:
 		si = frappe.get_doc("Sales Invoice", nome)
@@ -176,6 +194,7 @@ def _righe_da_sales_invoice(sezionale, filters):
 
 		base = {
 			"posting_date": si.posting_date,
+			"tipo_documento": codici.get(si.get("custom_tipo_di_documento"), si.get("custom_tipo_di_documento")),
 			"numero_documento_originale": si.name,  # coincidono, come da requisito
 			"ragione_sociale": si.customer_name,
 			"tax_id": tax_id,
@@ -193,7 +212,7 @@ def _righe_da_documento_integrativo(sezionale, filters):
 		"Documento Integrativo",
 		filters=di_filters,
 		fields=["name", "posting_date", "invoice_date", "cliente_nome", "cliente_tax_id",
-			"totale_documento", "purchase_invoice"],
+			"totale_documento", "purchase_invoice", "tipo_documento"],
 	)
 
 	righe = []
@@ -226,6 +245,7 @@ def _righe_da_documento_integrativo(sezionale, filters):
 			"numero_documento": row["name"],
 			"doctype_origine": "Documento Integrativo",
 			"data_documento": row["invoice_date"],
+			"tipo_documento": row["tipo_documento"],
 		}
 		_accoda_righe(righe, base, aliquote, row["totale_documento"], nota_rc=nota, nota_su_tutte=True)
 	return righe
