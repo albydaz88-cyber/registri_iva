@@ -249,6 +249,11 @@ def _imposta_reverse_charge(doc, natura, lato, imponibile, numero_rc):
 # Ricostruzione dalle righe tasse del documento
 # ---------------------------------------------------------------------------
 
+def _segno_importi(doc):
+	"""-1 per le note di credito (is_return), +1 altrimenti.
+	È l'unico segno 'legittimo' di un importo di registro: quello del
+	documento. Il segno della riga ADD/DEDUCT NON deve mai arrivare al registro."""
+	return -1 if doc.get("is_return") else 1
 
 def _breakdown_da_righe_tasse(doc, detrazione, lato):
 	"""Nel template reverse charge italiano la stessa imposta compare due volte
@@ -257,6 +262,8 @@ def _breakdown_da_righe_tasse(doc, detrazione, lato):
 	grand total. NON vanno sommate: farlo raddoppia l'imposta. La riga DEDUCT
 	non e' "IVA non detraibile" (concetto diverso)."""
 	e_purchase = doc.doctype == "Purchase Invoice"
+
+	segno = _segno_importi(doc)
 
 	righe_add = []
 	righe_deduct = []
@@ -363,9 +370,9 @@ def _breakdown_da_righe_tasse(doc, detrazione, lato):
 			{"tipo_imposta": tipo, "aliquota": rate, "imponibile": 0, "imposta": 0,
 			 "reverse_charge": e_reverse_charge, "natura_iva": natura or None},
 		)
-		riga["imponibile"] += base_amount
+		riga["imponibile"] += segno * abs(base_amount)
 		if ha_imposta:
-			riga["imposta"] += tax_amount
+			riga["imposta"] += segno * tax_amount
 
 	# Righe natura lette dagli item (Purchase Invoice, vedi sopra). N6.x
 	# (inversione contabile) e' l'unica famiglia con imposta autoliquidata; se
@@ -393,8 +400,8 @@ def _breakdown_da_righe_tasse(doc, detrazione, lato):
 				{"tipo_imposta": "Non Detraibile", "aliquota": rate, "imponibile": 0, "imposta": 0,
 				 "reverse_charge": False, "natura_iva": None},
 			)
-			riga["imponibile"] += _base_amount_da_riga(tax, rate, doc)
-			riga["imposta"] += importo
+			riga["imponibile"] += segno * abs(_base_amount_da_riga(tax, rate, doc))
+			riga["imposta"] += segno * importo
 
 	return list(risultato.values())
 
