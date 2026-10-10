@@ -306,7 +306,7 @@ def _breakdown_da_righe_tasse(doc, detrazione, lato):
 	for tax in righe_da_usare:
 		rate = _aliquota_da_riga(tax)
 		tax_amount = abs(_importo_tassa(tax))
-		base_amount = _base_amount_da_riga(tax, rate)
+		base_amount = _base_amount_da_riga(tax, rate, doc)
 		descrizione = tax.description or ""
 		# Per Purchase Invoice la natura si legge solo dagli item (sopra): si
 		# ignora quella eventualmente sulla tax row per non rischiare di
@@ -393,7 +393,7 @@ def _breakdown_da_righe_tasse(doc, detrazione, lato):
 				{"tipo_imposta": "Non Detraibile", "aliquota": rate, "imponibile": 0, "imposta": 0,
 				 "reverse_charge": False, "natura_iva": None},
 			)
-			riga["imponibile"] += _base_amount_da_riga(tax, rate)
+			riga["imponibile"] += _base_amount_da_riga(tax, rate, doc)
 			riga["imposta"] += importo
 
 	return list(risultato.values())
@@ -462,16 +462,22 @@ def _sono_speculari(righe_add, righe_deduct):
 	return all(k in chiavi(righe_add) for k in chiavi(righe_deduct))
 
 
-def _base_amount_da_riga(tax, rate=None):
+def _base_amount_da_riga(tax, rate=None, doc=None):
 	"""Imponibile di una riga IVA.
 
-	In ERPNext 16 il dettaglio per articolo e' nella tabella figlia
-	`item_wise_tax_details` (non piu' nel JSON `item_wise_tax_detail`, che peraltro
-	conteneva l'IMPOSTA per articolo e non l'imponibile). Se il dettaglio non c'e' si
-	risale dall'imposta: imposta / aliquota."""
+	In ERPNext 16 il dettaglio per articolo è nella tabella `item_wise_tax_details`
+	del DOCUMENTO (non della riga tassa), collegata con tax_row == tax.name.
+	Solo se manca si risale dall'imposta (meno preciso: può dare ±0,01)."""
 	base_amount = 0
-	for dettaglio in tax.get("item_wise_tax_details") or []:
-		base_amount += flt(dettaglio.get("taxable_amount"))
+
+	if doc is not None:
+		for d in doc.get("item_wise_tax_details") or []:
+			if d.get("tax_row") == tax.name:
+				base_amount += flt(d.get("taxable_amount"))
+
+	if not base_amount:  # compatibilità con eventuale struttura vecchia
+		for d in tax.get("item_wise_tax_details") or []:
+			base_amount += flt(d.get("taxable_amount"))
 
 	if rate is None:
 		rate = _aliquota_da_riga(tax)
