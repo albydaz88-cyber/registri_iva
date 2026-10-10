@@ -31,16 +31,32 @@ class DocumentoIntegrativo(Document):
 		self.calcola_totali()
 
 	def calcola_totali(self):
+		"""Normalizza il segno e ricalcola sempre i totali.
+
+		Un Documento Integrativo ha segno positivo, tranne quando integra una
+		nota di credito (Purchase Invoice con is_return): in quel caso è
+		interamente negativo. Qualunque sia il segno con cui arrivano le righe,
+		qui lo si riporta a quello corretto."""
+		segno = self._segno_documento()
+
 		totale_imponibile = 0.0
 		totale_imposta = 0.0
 		for riga in self.aliquote:
-			totale_imponibile += flt(riga.imponibile)
-			if riga.tipo_imposta not in TIPI_SENZA_IMPOSTA:
-				totale_imposta += flt(riga.imposta)
-			else:
+			riga.imponibile = segno * abs(flt(riga.imponibile))
+			if riga.tipo_imposta in TIPI_SENZA_IMPOSTA:
 				riga.imposta = 0
+			else:
+				riga.imposta = segno * abs(flt(riga.imposta))
+			totale_imponibile += riga.imponibile
+			totale_imposta += riga.imposta
 
 		self.totale_imponibile = totale_imponibile
 		self.totale_imposta = totale_imposta
-		if not self.totale_documento:
-			self.totale_documento = totale_imponibile + totale_imposta
+		# Campo read_only: va sempre ricalcolato, mai "se vuoto".
+		self.totale_documento = totale_imponibile + totale_imposta
+
+	def _segno_documento(self):
+		if not self.purchase_invoice:
+			return 1
+		is_return = frappe.db.get_value("Purchase Invoice", self.purchase_invoice, "is_return")
+		return -1 if is_return else 1
